@@ -2,6 +2,9 @@
 
 Qiskit to QIR translator.
 
+This is a temporary fork until the upstream qiskit-qir supports user-defined
+instructions.
+
 ## Example
 
 ```python
