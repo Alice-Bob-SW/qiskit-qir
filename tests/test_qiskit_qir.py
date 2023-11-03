@@ -22,6 +22,7 @@ from test_circuits.basic_gates import (
     double_op_tests,
     triple_op_tests,
     measurement_tests,
+    prepare_tests
 )
 
 import test_utils
@@ -137,6 +138,20 @@ def test_delay_gate(circuit_name, request):
         assert func[1] == test_utils.rotation_call_string(qir_op, duration, 0)
     assert func[2] == test_utils.return_string()
     assert len(func) == 3
+
+
+@pytest.mark.parametrize("circuit_name", prepare_tests)
+def test_prepares(circuit_name, request):
+    qir_op, state, circuit = request.getfixturevalue(circuit_name)
+    generated_qir = str(to_qir_module(circuit)[0]).splitlines()
+    test_utils.check_attributes(generated_qir, 1, 0)
+    func = test_utils.get_entry_point_body(generated_qir)
+    assert func[0] == test_utils.initialize_call_string()
+    args = {'0': False, '1': True, '+': False, '-': True}
+    assert func[1] == test_utils.prepare_call_string(qir_op, args[state], 0)
+    assert func[2] == test_utils.return_string()
+    assert len(func) == 3
+
 
 def test_two_delay_gates_single_declaration():
     circuit = QuantumCircuit(1)

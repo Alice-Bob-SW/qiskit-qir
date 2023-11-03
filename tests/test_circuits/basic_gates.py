@@ -5,6 +5,7 @@
 import pytest
 
 from qiskit import QuantumCircuit
+from . import custom_mx
 
 # All of the following dictionaries map from the names of methods on Qiskit QuantumCircuit objects
 # to the name of the equivalent pyqir BasicQisBuilder method
@@ -23,11 +24,16 @@ _one_qubit_gates = {
 
 _adj_gates = {"sdg": "s", "tdg": "t"}
 
-_measurements = {"measure": "mz"}
+_measurements = {"measure": "mz", "measure_x": "mx"}
 
 _delays = {"delay": "delay"}
 
 _rotations = {"rx": "rx", "ry": "ry", "rz": "rz"}
+
+_prepares = {
+    "0": "prepare_z", "1": "prepare_z",
+    "+": "prepare_x", "-": "prepare_x",
+}
 
 _two_qubit_gates = {"cx": "cnot", "cz": "cz", "swap": "swap"}
 
@@ -55,8 +61,14 @@ def _map_gate_name(gate: str) -> str:
         return _three_qubit_gates[gate]
     elif gate in _zero_qubit_operations:
         return _zero_qubit_operations[gate]
+    elif gate in _prepares:
+        return _prepares[gate]
     else:
         raise ValueError(f"Unknown Qiskit gate {gate}")
+
+
+def _map_prepare_name(state: str) -> str:
+    return _prepares[state]
 
 
 def _generate_one_qubit_fixture(gate: str):
@@ -99,6 +111,24 @@ for unit in {'s', 'ms', 'us', 'ns', 'ps', 'dt'}:
     name = _fixture_name('delay_' + unit)
     delay_tests.append(name)
     locals()[name] = _generate_delay_gate_fixture(unit)
+
+
+def _generate_prepare_fixture(state: str):
+    @pytest.fixture()
+    def test_fixture():
+        circuit = QuantumCircuit(1)
+        circuit.initialize(state, 0)
+        return _map_prepare_name(state), state, circuit
+
+    return test_fixture
+
+
+prepare_tests = []
+# Generate time param operation fixtures
+for state in {'0', '1', '+', '-'}:
+    name = _fixture_name('initialize_' + unit)
+    prepare_tests.append(name)
+    locals()[name] = _generate_prepare_fixture(state)
 
 
 def _generate_rotation_fixture(gate: str):
