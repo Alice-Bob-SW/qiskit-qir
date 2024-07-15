@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 import logging
 
+from qiskit import QuantumCircuit
 from qiskit_qir.elements import QiskitModule
 from qiskit_qir.visitor import BasicQisVisitor
 from qiskit_qir.translate import to_qir_module
@@ -16,10 +17,12 @@ from test_circuits.control_flow_circuits import cf_fixtures
 from test_circuits.basic_gates import (
     single_op_tests,
     adj_op_tests,
+    delay_tests,
     rotation_tests,
     double_op_tests,
     triple_op_tests,
     measurement_tests,
+    prepare_tests
 )
 
 import test_utils
@@ -119,6 +122,46 @@ def test_rotation_gates(circuit_name, request):
     assert func[2] == test_utils.return_string()
     assert len(func) == 3
 
+
+@pytest.mark.parametrize("circuit_name", delay_tests)
+def test_delay_gate(circuit_name, request):
+    qir_op, unit, circuit = request.getfixturevalue(circuit_name)
+    generated_qir = str(to_qir_module(circuit)[0]).splitlines()
+    test_utils.check_attributes(generated_qir, 1, 0)
+    func = test_utils.get_entry_point_body(generated_qir)
+    assert func[0] == test_utils.initialize_call_string()
+    if  unit == 'dt':
+        assert func[1] == test_utils.rotation_call_string(qir_op, 1, 0)
+    else:
+        multipliers = {"s": 1e6, "ms": 1e3, "us": 1, "ns": 1e-3, "ps": 1e-6}
+        duration = 0.5 * multipliers[unit]
+        assert func[1] == test_utils.rotation_call_string(qir_op, duration, 0)
+    assert func[2] == test_utils.return_string()
+    assert len(func) == 3
+
+
+@pytest.mark.parametrize("circuit_name", prepare_tests)
+def test_prepares(circuit_name, request):
+    qir_op, state, circuit = request.getfixturevalue(circuit_name)
+    generated_qir = str(to_qir_module(circuit)[0]).splitlines()
+    test_utils.check_attributes(generated_qir, 1, 0)
+    func = test_utils.get_entry_point_body(generated_qir)
+    assert func[0] == test_utils.initialize_call_string()
+    args = {'0': False, '1': True, '+': False, '-': True}
+    assert func[1] == test_utils.prepare_call_string(qir_op, args[state], 0)
+    assert func[2] == test_utils.return_string()
+    assert len(func) == 3
+
+
+def test_two_delay_gates_single_declaration():
+    circuit = QuantumCircuit(1)
+    circuit.delay(1, unit='dt')
+    circuit.delay(2, unit='dt')
+    generated_qir = str(to_qir_module(circuit)[0]).splitlines()
+    func = test_utils.get_entry_point_body(generated_qir)
+    assert func[0] == test_utils.initialize_call_string()
+    assert func[1] == test_utils.rotation_call_string('delay', 1, 0)
+    assert func[2] == test_utils.rotation_call_string('delay', 2, 0)
 
 @pytest.mark.parametrize("circuit_name", double_op_tests)
 def test_double_qubit_gates(circuit_name, request):

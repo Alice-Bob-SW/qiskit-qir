@@ -41,6 +41,10 @@ def rotation_call_string(name: str, theta: float, qb: int) -> str:
     return f"call void @__quantum__qis__{name}__body(double {theta:#e}, {_qubit_string(qb)})"
 
 
+def prepare_call_string(name: str, arg: bool, qb: int) -> str:
+    return f"call void @__quantum__qis__{name}__body(i1 {str(arg).lower()}, {_qubit_string(qb)})"
+
+
 def measure_call_string(name: str, res: str, qb: int) -> str:
     return f"call void @__quantum__qis__{name}__body({_qubit_string(qb)}, {_result_string(res)})"
 
