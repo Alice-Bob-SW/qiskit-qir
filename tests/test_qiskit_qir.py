@@ -22,7 +22,7 @@ from test_circuits.basic_gates import (
     double_op_tests,
     triple_op_tests,
     measurement_tests,
-    prepare_tests
+    prepare_tests,
 )
 
 import test_utils
@@ -130,7 +130,7 @@ def test_delay_gate(circuit_name, request):
     test_utils.check_attributes(generated_qir, 1, 0)
     func = test_utils.get_entry_point_body(generated_qir)
     assert func[0] == test_utils.initialize_call_string()
-    if  unit == 'dt':
+    if unit == "dt":
         assert func[1] == test_utils.rotation_call_string(qir_op, 1, 0)
     else:
         multipliers = {"s": 1e6, "ms": 1e3, "us": 1, "ns": 1e-3, "ps": 1e-6}
@@ -147,7 +147,7 @@ def test_prepares(circuit_name, request):
     test_utils.check_attributes(generated_qir, 1, 0)
     func = test_utils.get_entry_point_body(generated_qir)
     assert func[0] == test_utils.initialize_call_string()
-    args = {'0': False, '1': True, '+': False, '-': True}
+    args = {"0": False, "1": True, "+": False, "-": True}
     assert func[1] == test_utils.prepare_call_string(qir_op, args[state], 0)
     assert func[2] == test_utils.return_string()
     assert len(func) == 3
@@ -155,13 +155,14 @@ def test_prepares(circuit_name, request):
 
 def test_two_delay_gates_single_declaration():
     circuit = QuantumCircuit(1)
-    circuit.delay(1, unit='dt')
-    circuit.delay(2, unit='dt')
+    circuit.delay(1, unit="dt")
+    circuit.delay(2, unit="dt")
     generated_qir = str(to_qir_module(circuit)[0]).splitlines()
     func = test_utils.get_entry_point_body(generated_qir)
     assert func[0] == test_utils.initialize_call_string()
-    assert func[1] == test_utils.rotation_call_string('delay', 1, 0)
-    assert func[2] == test_utils.rotation_call_string('delay', 2, 0)
+    assert func[1] == test_utils.rotation_call_string("delay", 1, 0)
+    assert func[2] == test_utils.rotation_call_string("delay", 2, 0)
+
 
 @pytest.mark.parametrize("circuit_name", double_op_tests)
 def test_double_qubit_gates(circuit_name, request):
