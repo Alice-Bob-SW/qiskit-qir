@@ -42,7 +42,7 @@ def unroll():
     circ = QuantumCircuit(3)
     circ.ccx(0, 1, 2)
     circ.crz(theta=0.1, control_qubit=0, target_qubit=1)
-    circ.id(0)
+    circ.id(2)
 
     return circ.decompose()
 
@@ -86,7 +86,7 @@ def bernstein_vazirani_with_delay():
     oracle = oracle[::-1]
     for index in range(num_qubits):
         if oracle[index] == "0":
-            circuit.i(index)
+            circuit.id(index)
         else:
             circuit.cx(index, num_qubits)
 
@@ -118,9 +118,10 @@ def ghz_with_delay():
 
     return circuit
 
+
 @pytest.fixture()
 def measure_x_as_subroutine():
-    measure_x_circuit = QuantumCircuit(1, 1, name='measure_x')
+    measure_x_circuit = QuantumCircuit(1, 1, name="measure_x")
     measure_x_circuit.h(0)
     measure_x_circuit.measure(0, 0)
     measure_x_circuit.h(0)

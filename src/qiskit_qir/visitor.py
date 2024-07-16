@@ -110,6 +110,7 @@ class QuantumCircuitElementVisitor(metaclass=ABCMeta):
 class BasicQisVisitor(QuantumCircuitElementVisitor):
     def __init__(self, profile: str = "AdaptiveExecution", **kwargs):
         self._module = None
+        self._qiskitModule: QiskitModule | None = None
         self._builder = None
         self._entry_point = None
         self._qubit_labels = {}
@@ -126,6 +127,7 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
             f"Visiting Qiskit module '{module.name}' ({module.num_qubits}, {module.num_clbits})"
         )
         self._module = module.module
+        self._qiskitModule = module
         context = self._module.context
         entry = entry_point(
             self._module, module.name, module.num_qubits, module.num_clbits
@@ -202,7 +204,7 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
                 f"Composite instruction {instruction.name} called with the wrong number of classical bits; \
 {subcircuit.num_clbits} expected, {len(cargs)} provided"
             )
-        for (inst, i_qargs, i_cargs) in subcircuit.data:
+        for inst, i_qargs, i_cargs in subcircuit.data:
             mapped_qbits = [qargs[subcircuit.qubits.index(i)] for i in i_qargs]
             mapped_clbits = [cargs[subcircuit.clbits.index(i)] for i in i_cargs]
             _log.debug(
@@ -226,7 +228,7 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
             instruction.condition is not None
         ) and not self._capabilities & Capability.CONDITIONAL_BRANCHING_ON_RESULT:
             raise ConditionalBranchingOnResultError(
-                instruction, qargs, cargs, self._profile
+                self._qiskitModule.circuit, instruction, qargs, cargs, self._profile
             )
 
         labels = ", ".join([str(l) for l in qlabels + clabels])
@@ -314,7 +316,11 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
                 if instruction.name in _SUPPORTED_INSTRUCTIONS:
                     if any(map(self._measured_qubits.get, map(qubit_id, qubits))):
                         raise QubitUseAfterMeasurementError(
-                            instruction, qargs, cargs, self._profile
+                            self._qiskitModule.circuit,
+                            instruction,
+                            qargs,
+                            cargs,
+                            self._profile,
                         )
             if "barrier" == instruction.name:
                 if self._emit_barrier_calls:
@@ -324,7 +330,14 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
                 # suited to current performance of qubit implementations.
                 # When using dt, the backend-dependent time unit, the duration
                 # value is left untouched.
-                multipliers = {"s": 1e6, "ms": 1e3, "us": 1, "ns": 1e-3, "ps": 1e-6, "dt": 1.0}
+                multipliers = {
+                    "s": 1e6,
+                    "ms": 1e3,
+                    "us": 1,
+                    "ns": 1e-3,
+                    "ps": 1e-6,
+                    "dt": 1.0,
+                }
                 duration = instruction.duration * multipliers[instruction.unit]
                 self._call_delay_instruction(duration, *qubits)
             elif "initialize" == instruction.name:
@@ -364,8 +377,9 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
                 qis.z(self._builder, *qubits)
             elif "id" == instruction.name:
                 # See: https://github.com/qir-alliance/pyqir/issues/74
-                qis.x(self._builder, pyqir.qubit(self._module.context, 0))
-                qis.x(self._builder, pyqir.qubit(self._module.context, 0))
+                qubit = pyqir.qubit(self._module.context, qubit_id(*qubits))
+                qis.x(self._builder, qubit)
+                qis.x(self._builder, qubit)
             elif instruction.definition:
                 _log.debug(
                     f"About to process composite instruction {instruction.name} with qubits {qargs}"
@@ -400,7 +414,9 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
         void = pyqir.Type.void(mod.context)
         double = pyqir.Type.double(mod.context)
         function_type = FunctionType(void, [double, pyqir.qubit_type(mod.context)])
-        return Function(function_type, Linkage.EXTERNAL, "__quantum__qis__delay__body", mod)
+        return Function(
+            function_type, Linkage.EXTERNAL, "__quantum__qis__delay__body", mod
+        )
 
     def _declare_prepare_basis_instruction(self, basis: str) -> None:
         mod = self._module
@@ -408,41 +424,54 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
         void = pyqir.Type.void(mod.context)
         boolean = pyqir.IntType(mod.context, width=1)
         function_type = FunctionType(void, [boolean, pyqir.qubit_type(mod.context)])
-        return Function(function_type, Linkage.EXTERNAL, f"__quantum__qis__prepare_{basis}__body", mod)
+        return Function(
+            function_type,
+            Linkage.EXTERNAL,
+            f"__quantum__qis__prepare_{basis}__body",
+            mod,
+        )
 
     def _declare_mx_instruction(self) -> None:
         mod = self._module
         assert mod is not None
         void = pyqir.Type.void(mod.context)
-        function_type = FunctionType(void, [pyqir.qubit_type(mod.context), pyqir.result_type(mod.context)])
-        return Function(function_type, Linkage.EXTERNAL, f"__quantum__qis__mx__body", mod)
+        function_type = FunctionType(
+            void, [pyqir.qubit_type(mod.context), pyqir.result_type(mod.context)]
+        )
+        return Function(
+            function_type, Linkage.EXTERNAL, f"__quantum__qis__mx__body", mod
+        )
 
     def _call_delay_instruction(self, duration: float, qubit: Constant) -> None:
         assert self._module is not None
         # Ensure we are using the same delay instruction once we declared it,
         # if we call it multiple times.
-        if 'delay' not in self._declarations:
-            self._declarations['delay'] = self._declare_delay_instruction()
+        if "delay" not in self._declarations:
+            self._declarations["delay"] = self._declare_delay_instruction()
         double = pyqir.Type.double(self._module.context)
-        self._builder.call(self._declarations['delay'], [const(double, duration), qubit])
+        self._builder.call(
+            self._declarations["delay"], [const(double, duration), qubit]
+        )
 
     def _call_mx_instruction(self, qubit: Constant, bit: Constant) -> None:
         assert self._module is not None
-        if 'mx' not in self._declarations:
-            self._declarations['mx'] = self._declare_mx_instruction()
-        self._builder.call(self._declarations['mx'], [qubit, bit])
+        if "mx" not in self._declarations:
+            self._declarations["mx"] = self._declare_mx_instruction()
+        self._builder.call(self._declarations["mx"], [qubit, bit])
 
     def _call_prepare_basis_instruction(self, state: str, qubit: Constant) -> None:
         assert self._module is not None
         known_states = {
-            '0': ('z', False),
-            '1': ('z', True),
-            '+': ('x', False),
-            '-': ('x', True),
+            "0": ("z", False),
+            "1": ("z", True),
+            "+": ("x", False),
+            "-": ("x", True),
         }
         basis, arg = known_states[state]
-        prep_name = f'p{basis}'
+        prep_name = f"p{basis}"
         if prep_name not in self._declarations:
-            self._declarations[prep_name] = self._declare_prepare_basis_instruction(basis)
+            self._declarations[prep_name] = self._declare_prepare_basis_instruction(
+                basis
+            )
         boolean = pyqir.IntType(self._module.context, width=1)
         self._builder.call(self._declarations[prep_name], [const(boolean, arg), qubit])

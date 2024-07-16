@@ -26,8 +26,8 @@ class MeasureX(Instruction):
 
     def __init__(self, label: Optional[str] = None):
         """Create a new X-measurement instruction."""
-        super().__init__('measure_x', 1, 1, [], label=label)
-        self._definition = QuantumCircuit(1, 1, name='measure_x')
+        super().__init__("measure_x", 1, 1, [], label=label)
+        self._definition = QuantumCircuit(1, 1, name="measure_x")
         self._definition.h(0)
         self._definition.measure(0, 0)
         self._definition.h(0)
@@ -44,9 +44,7 @@ QuantumCircuit.measure_x = _measure_x
 
 # Add MeasureX to the session equivalence library
 _measure_x_inst = MeasureX()
-SessionEquivalenceLibrary.add_equivalence(
-    _measure_x_inst, _measure_x_inst.definition
-)
+SessionEquivalenceLibrary.add_equivalence(_measure_x_inst, _measure_x_inst.definition)
 
 
 # Add an equivalent from Reset to Initialize('0'). This is useful in the case
@@ -58,5 +56,5 @@ SessionEquivalenceLibrary.add_equivalence(
 # That's what this equivalence rule does. If it causes trouble in the future,
 # it may be removed.
 _c = QuantumCircuit(1, 0)
-_c.initialize('0', 0)  # pylint: disable=no-member
+_c.initialize("0", 0)  # pylint: disable=no-member
 SessionEquivalenceLibrary.add_equivalence(Reset(), _c)

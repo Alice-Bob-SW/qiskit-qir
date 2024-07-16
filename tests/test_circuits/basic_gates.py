@@ -31,8 +31,10 @@ _delays = {"delay": "delay"}
 _rotations = {"rx": "rx", "ry": "ry", "rz": "rz"}
 
 _prepares = {
-    "0": "prepare_z", "1": "prepare_z",
-    "+": "prepare_x", "-": "prepare_x",
+    "0": "prepare_z",
+    "1": "prepare_z",
+    "+": "prepare_x",
+    "-": "prepare_x",
 }
 
 _two_qubit_gates = {"cx": "cnot", "cz": "cz", "swap": "swap"}
@@ -96,19 +98,19 @@ def _generate_delay_gate_fixture(unit: str):
     @pytest.fixture()
     def test_fixture():
         circuit = QuantumCircuit(1)
-        if unit == 'dt':
+        if unit == "dt":
             circuit.delay(1, 0, unit=unit)
         else:
             circuit.delay(0.5, 0, unit=unit)
-        return _map_gate_name('delay'), unit, circuit
+        return _map_gate_name("delay"), unit, circuit
 
     return test_fixture
 
 
 delay_tests = []
 # Generate time param operation fixtures
-for unit in {'s', 'ms', 'us', 'ns', 'ps', 'dt'}:
-    name = _fixture_name('delay_' + unit)
+for unit in {"s", "ms", "us", "ns", "ps", "dt"}:
+    name = _fixture_name("delay_" + unit)
     delay_tests.append(name)
     locals()[name] = _generate_delay_gate_fixture(unit)
 
@@ -125,8 +127,8 @@ def _generate_prepare_fixture(state: str):
 
 prepare_tests = []
 # Generate time param operation fixtures
-for state in {'0', '1', '+', '-'}:
-    name = _fixture_name('initialize_' + unit)
+for state in {"0", "1", "+", "-"}:
+    name = _fixture_name("initialize_" + unit)
     prepare_tests.append(name)
     locals()[name] = _generate_prepare_fixture(state)
 
