@@ -5,8 +5,9 @@
 from io import UnsupportedOperation
 import logging
 from abc import ABCMeta, abstractmethod
-from qiskit import ClassicalRegister, QuantumRegister
-from qiskit.circuit import Qubit, Clbit
+from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit
+from qiskit.circuit import Qubit, Clbit, SwitchCaseOp, IfElseOp, CASE_DEFAULT, ForLoopOp, ParameterExpression, \
+    BreakLoopOp
 from qiskit.circuit.instruction import Instruction
 from qiskit.circuit.bit import Bit
 import pyqir.qis as qis
@@ -24,9 +25,11 @@ from pyqir import (
     PointerType,
     const,
     entry_point,
-    qubit_id,
+    qubit_id, Value, Context, ModuleFlagBehavior,
 )
-from typing import List, Union
+from typing import List, Union, Iterable, Iterator, cast, Callable
+
+from qiskit.circuit.parametertable import ParameterView
 
 from qiskit_qir.capability import (
     Capability,
@@ -121,6 +124,9 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
         self._emit_barrier_calls = kwargs.get("emit_barrier_calls", False)
         self._record_output = kwargs.get("record_output", True)
         self._declarations = {}
+        self._current_block_level = 0
+        self._current_loop_blocks = []  # Stack of (loop_exit_block, loop_continue_block)
+        self._current_function = None
 
     def visit_qiskit_module(self, module: QiskitModule):
         _log.debug(
@@ -133,9 +139,11 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
             self._module, module.name, module.num_qubits, module.num_clbits
         )
 
+        self._current_function = entry
         self._entry_point = entry.name
         self._builder = Builder(context)
         self._builder.insert_at_end(BasicBlock(context, "entry", entry))
+        qis
 
         i8p = PointerType(IntType(context, 8))
         nullptr = Constant.null(i8p)
@@ -235,11 +243,28 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
         if instruction.condition is None or skip_condition:
             _log.debug(f"Visiting instruction '{instruction.name}' ({labels})")
 
-        if instruction.condition is not None and skip_condition is False:
+        if instruction.name == "switch_case":
+            switch = cast(SwitchCaseOp, instruction)
+            self._build_switch_case(switch)
+        elif instruction.name == "for_loop":
+            for_loop = cast(ForLoopOp, instruction)
+            index_set, loop_parameter, repeated_circuit = for_loop.params
+
+            # Process each iteration
+            for i, param in enumerate(index_set):
+                # Assign parameter and process the circuit
+                assigned_circuit = repeated_circuit.copy()
+                assigned_circuit.assign_parameters({loop_parameter: param}, inplace=True)
+                for instr in assigned_circuit.data:
+                    self.visit_instruction(instr, instr.qubits, instr.clbits)
+        elif instruction.name == "break_loop":
+            break_loop = cast(BreakLoopOp, instruction)
+
+            # should jump to the latest continue block of the Qir representation
+        elif instruction.condition is not None and skip_condition is False:
             _log.debug(
                 f"Visiting condition for instruction '{instruction.name}' ({labels})"
             )
-
             if isinstance(instruction.condition[0], Clbit):
                 bit_label = self._clbit_labels.get(instruction.condition[0])
                 conditions = [pyqir.result(self._module.context, bit_label)]
@@ -248,14 +273,12 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
                     pyqir.result(self._module.context, self._clbit_labels.get(bit))
                     for bit in instruction.condition[0]
                 ]
-
             # Convert value into a bitstring of the same length as classical register
             # condition should be a
             # - tuple (ClassicalRegister, int)
             # - tuple (Clbit, bool)
             # - tuple (Clbit, int)
             if isinstance(instruction.condition[0], Clbit):
-                bit: Clbit = instruction.condition[0]
                 value: Union[int, bool] = instruction.condition[1]
                 if value:
                     values = "1"
@@ -270,7 +293,7 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
             def __visit():
                 self.visit_instruction(instruction, qargs, cargs, skip_condition=True)
 
-            def _branch(conditions_values):
+            def _branch(conditions_values: Iterator[tuple[Value, str]]):
                 try:
                     cond, val = next(conditions_values)
 
@@ -292,9 +315,15 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
                     f"Value {value} is larger than register width {len(conditions)}."
                 )
 
+            _control_flow_branch = self.conditional_branch(instruction)
+
             # qiskit has the most significant bit on the right, so we
             # must reverse the bit array for comparisons.
-            _branch(zip(conditions, values[::-1]))()
+            conditions_values = zip(conditions, values[::-1])
+            if instruction.name == "if_else":
+                _control_flow_branch(conditions_values)
+            else:
+                _branch(conditions_values)()
         elif (
             "measure" == instruction.name
             or "m" == instruction.name
@@ -322,7 +351,7 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
                             cargs,
                             self._profile,
                         )
-            if "barrier" == instruction.name:
+            elif "barrier" == instruction.name:
                 if self._emit_barrier_calls:
                     qis.barrier(self._builder)
             elif "delay" == instruction.name:
@@ -390,6 +419,149 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
                     f"Gate {instruction.name} is not supported. \
     Please transpile using the list of supported gates: {_SUPPORTED_INSTRUCTIONS}."
                 )
+
+    def _alternate_switch_case(self, switch: SwitchCaseOp):
+        ...
+
+    def _build_switch_case(self, switch: SwitchCaseOp):
+        """
+        By default, the switch case operation isn't supported by Qir standards.
+        Therefore, this function converts the switch case operation into a chain
+        of nested if statements.
+        """
+        if switch.target is not None:
+            # Switch statements have no "condition" attribute like the IfElseOp
+            # but a 'target', which is the clbit or the register on which the
+            # switch statement is applied on
+            if isinstance(switch.target, Clbit):
+                bit_label = self._clbit_labels.get(switch.target)
+                conditions = [pyqir.result(self._module.context, bit_label)]
+                register_size = 1
+            else:
+                conditions = [pyqir.result(self._module.context, self._clbit_labels.get(bit)) for bit in
+                              switch.target]
+                register_size = switch.target.size
+
+            # Convert cases to value-body pairs that will be
+            # transformed to chained if statements
+            value_to_body = []
+            cases = switch.cases().items()
+            default_body: QuantumCircuit | None = None
+            for case_value, case_body in cases:
+                if case_value is CASE_DEFAULT:
+                    default_body = case_body
+                    continue
+
+                # Qir control flow is made bit by bit so we have to
+                # make sure the bit_value is of the same size as the
+                # register
+                bit_value = format(case_value, f"0{register_size}b")
+                # Qiskit has its most significant bit on the right,
+                # so we reverse the bit value
+                value_to_body.append((bit_value[::-1], case_body))
+            if default_body:
+                # SwitchCaseOp uses a wildcard type to represent
+                # the value of the 'default' case. It cannot be
+                # represented number so we apply a wildcard '*'.
+                value_to_body.append(('*', default_body))
+
+            self._execute_switch_case(conditions, value_to_body)
+
+    def _execute_switch_case(self, conditions, value_to_body: list[tuple[str, QuantumCircuit]]):
+        """
+        This function will execute the switch_case operation as a chain of nester if statements.
+        It relies on `if_result` operation to behave as if statements.
+        """
+        default_body: QuantumCircuit | None = None
+        filtered_cases: list[tuple[str, QuantumCircuit]] = []
+
+        for value, body in value_to_body:
+            if value == '*':
+                default_body = body
+            else:
+                filtered_cases.append((value, body))
+
+        def __visit_body(body: QuantumCircuit):
+            for instr in body.data:
+                self.visit_instruction(instr, instr.qubits, instr.clbits, skip_condition=True)
+
+        # If there are no cases, only a default one
+        # we execute the body
+        if not filtered_cases:
+            if default_body:
+                __visit_body(default_body)
+
+        def _process_cases(case_index=0, bit_index=0):
+            # All bits matched for this case
+            if bit_index >= len(conditions) - 1:
+                _, to_visit = filtered_cases[case_index]
+                __visit_body(to_visit)
+                return
+
+            # No more cases to check, use default
+            if case_index >= len(filtered_cases) - 1:
+                if default_body:
+                    __visit_body(default_body)
+                return
+
+            value = filtered_cases[case_index][0]
+            current_bit = value[bit_index] if bit_index < len(value) else "0"
+
+            # Create an if_result for the current bit
+            qis.if_result(
+                self._builder,
+                conditions[bit_index],
+                one=lambda: _process_cases(case_index, bit_index + 1) if current_bit == "1" else _process_cases(
+                    case_index + 1, bit_index),
+                zero=lambda: _process_cases(case_index, bit_index + 1) if current_bit == "0" else _process_cases(
+                    case_index + 1, bit_index)
+            )
+
+        _process_cases()
+
+    def _has_break_loop(self, instruction: Instruction):
+        """
+        Determines if an instruction contains a break loop.
+        For example, in the case of an if_test statement,
+        the function will loop through the parameters of the
+        instruction (true_body and false_body) and look recursively
+        if a break loop is found.
+        """
+        if instruction.name == "break_loop":
+            return True
+        else:
+            for param in instruction.params:
+                if isinstance(param, QuantumCircuit):
+                    for instr in param.data:
+                        return self._has_break_loop(instr)
+        return False
+
+    def conditional_branch(self, instruction):
+        def _visit(body: QuantumCircuit) -> None:
+            if body:
+                for instr in body.data:
+                    self.visit_instruction(instr, instr.qubits, instr.clbits, skip_condition=instr.condition)
+
+        def _branch(conditions_values):
+            try:
+                true_body, false_body = instruction.params
+                cond, val = next(conditions_values)
+
+                qis.if_result(
+                    self._builder,
+                    cond,
+                    one=lambda: _visit(true_body),
+                    zero=lambda: _visit(false_body),
+                )
+            except StopIteration:
+                return self.visit_instruction(
+                    instruction,
+                    instruction.qubits,
+                    instruction.clbits,
+                    skip_condition=True
+                )
+
+        return _branch
 
     def ir(self) -> str:
         return str(self._module)
