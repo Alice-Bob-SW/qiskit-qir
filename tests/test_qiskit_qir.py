@@ -97,7 +97,10 @@ def test_noop_gates(circuit_name, request):
     assert generated_ir is not None
 
 
-@pytest.mark.xfail(Reason="OpenQASM 3.0-style control flow is not supported yet")
+@pytest.mark.xfail(
+    reason="OpenQASM 3.0-style control flow is not supported yet",
+    strict=True,
+)
 @pytest.mark.parametrize("circuit_name", cf_fixtures)
 def test_control_flow(circuit_name, request):
     circuit = request.getfixturevalue(circuit_name)
