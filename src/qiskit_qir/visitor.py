@@ -10,6 +10,7 @@ from qiskit.circuit import Qubit, Clbit
 from qiskit.circuit.instruction import Instruction
 from qiskit.circuit import Bit
 from qiskit.circuit.controlflow import IfElseOp
+from qiskit.circuit.classical import expr as qiskit_expr
 import pyqir.qis as qis
 import pyqir.rt as rt
 import pyqir
@@ -339,6 +340,19 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
         if not self._capabilities & Capability.CONDITIONAL_BRANCHING_ON_RESULT:
             raise ConditionalBranchingOnResultError(
                 self._qiskitModule.circuit, op, qargs, cargs, self._profile
+            )
+
+        if len(op.blocks) > 1:
+            raise NotImplementedError(
+                "IfElseOp with an else branch is not yet supported. "
+                "Only if-without-else is currently translated to QIR."
+            )
+
+        if not isinstance(op.condition, tuple):
+            raise NotImplementedError(
+                f"Classical expression conditions (expr API) are not yet supported. "
+                f"Use the tuple-based condition: (ClassicalRegister, int) or (Clbit, bool). "
+                f"Got: {op.condition!r}"
             )
 
         cond_target, cond_value = op.condition

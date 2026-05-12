@@ -33,6 +33,31 @@ if _log.isEnabledFor(logging.DEBUG) and not _test_output_dir.exists():
     _test_output_dir.mkdir()
 
 
+def test_if_test_with_expr_api_raises_not_implemented():
+    """expr.Expr conditions must raise NotImplementedError, not a cryptic TypeError."""
+    from qiskit.circuit.classical import expr as qiskit_expr
+
+    circuit = QuantumCircuit(2, 2)
+    circuit.measure(0, 0)
+    cr = circuit.cregs[0]
+    with circuit.if_test(qiskit_expr.equal(cr, 1)):
+        circuit.x(1)
+    with pytest.raises(NotImplementedError, match="Classical expression conditions"):
+        to_qir_module(circuit)
+
+
+def test_if_else_with_else_branch_raises_not_implemented():
+    """if-else circuits (with else body) must raise NotImplementedError, not silently drop the else."""
+    circuit = QuantumCircuit(2, 2)
+    circuit.measure(0, 0)
+    with circuit.if_test((circuit.clbits[0], 0)) as else_:
+        circuit.x(1)
+    with else_:
+        circuit.h(1)
+    with pytest.raises(NotImplementedError, match="else branch"):
+        to_qir_module(circuit)
+
+
 @pytest.mark.parametrize("circuit_name", core_tests)
 def test_visitor(circuit_name, request):
     circuit = request.getfixturevalue(circuit_name)
