@@ -9,20 +9,20 @@ from pyqir import is_entry_point, Context, Module, Function
 
 def _qubit_string(qubit: int) -> str:
     if qubit == 0:
-        return "%Qubit* null"
+        return "ptr null"
     else:
-        return f"%Qubit* inttoptr (i64 {qubit} to %Qubit*)"
+        return f"ptr inttoptr (i64 {qubit} to ptr)"
 
 
 def _result_string(res: int) -> str:
     if res == 0:
-        return "%Result* null"
+        return "ptr null"
     else:
-        return f"%Result* inttoptr (i64 {res} to %Result*)"
+        return f"ptr inttoptr (i64 {res} to ptr)"
 
 
 def initialize_call_string() -> str:
-    return "call void @__quantum__rt__initialize(i8* null)"
+    return "call void @__quantum__rt__initialize(ptr null)"
 
 
 def single_op_call_string(name: str, qb: int) -> str:
@@ -64,12 +64,12 @@ def return_string() -> str:
 
 def array_record_output_string(num_elements: int) -> str:
     return (
-        f"call void @__quantum__rt__array_record_output(i64 {num_elements}, i8* null)"
+        f"call void @__quantum__rt__array_record_output(i64 {num_elements}, ptr null)"
     )
 
 
 def result_record_output_string(res: str) -> str:
-    return f"call void @__quantum__rt__result_record_output({_result_string(res)}, i8* null)"
+    return f"call void @__quantum__rt__result_record_output({_result_string(res)}, ptr null)"
 
 
 # Returns the method body with:

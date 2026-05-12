@@ -8,7 +8,9 @@ from abc import ABCMeta, abstractmethod
 from qiskit import ClassicalRegister, QuantumRegister
 from qiskit.circuit import Qubit, Clbit
 from qiskit.circuit.instruction import Instruction
-from qiskit.circuit.bit import Bit
+from qiskit.circuit import Bit
+from qiskit.circuit.controlflow import IfElseOp
+from qiskit.circuit.classical import expr as qiskit_expr
 import pyqir.qis as qis
 import pyqir.rt as rt
 import pyqir
@@ -24,9 +26,9 @@ from pyqir import (
     PointerType,
     const,
     entry_point,
-    qubit_id,
+    ptr_id,
 )
-from typing import List, Union
+from typing import List
 
 from qiskit_qir.capability import (
     Capability,
@@ -204,7 +206,10 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
                 f"Composite instruction {instruction.name} called with the wrong number of classical bits; \
 {subcircuit.num_clbits} expected, {len(cargs)} provided"
             )
-        for inst, i_qargs, i_cargs in subcircuit.data:
+        for circuit_instr in subcircuit.data:
+            inst = circuit_instr.operation
+            i_qargs = circuit_instr.qubits
+            i_cargs = circuit_instr.clbits
             mapped_qbits = [qargs[subcircuit.qubits.index(i)] for i in i_qargs]
             mapped_clbits = [cargs[subcircuit.clbits.index(i)] for i in i_cargs]
             _log.debug(
@@ -217,95 +222,30 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
         instruction: Instruction,
         qargs: List[Bit],
         cargs: List[Bit],
-        skip_condition=False,
     ):
+        if isinstance(instruction, IfElseOp):
+            self._visit_if_else_op(instruction, qargs, cargs)
+            return
+
         qlabels = [self._qubit_labels.get(bit) for bit in qargs]
         clabels = [self._clbit_labels.get(bit) for bit in cargs]
         qubits = [pyqir.qubit(self._module.context, n) for n in qlabels]
         results = [pyqir.result(self._module.context, n) for n in clabels]
 
-        if (
-            instruction.condition is not None
-        ) and not self._capabilities & Capability.CONDITIONAL_BRANCHING_ON_RESULT:
-            raise ConditionalBranchingOnResultError(
-                self._qiskitModule.circuit, instruction, qargs, cargs, self._profile
-            )
-
         labels = ", ".join([str(l) for l in qlabels + clabels])
-        if instruction.condition is None or skip_condition:
-            _log.debug(f"Visiting instruction '{instruction.name}' ({labels})")
+        _log.debug(f"Visiting instruction '{instruction.name}' ({labels})")
 
-        if instruction.condition is not None and skip_condition is False:
-            _log.debug(
-                f"Visiting condition for instruction '{instruction.name}' ({labels})"
-            )
-
-            if isinstance(instruction.condition[0], Clbit):
-                bit_label = self._clbit_labels.get(instruction.condition[0])
-                conditions = [pyqir.result(self._module.context, bit_label)]
-            else:
-                conditions = [
-                    pyqir.result(self._module.context, self._clbit_labels.get(bit))
-                    for bit in instruction.condition[0]
-                ]
-
-            # Convert value into a bitstring of the same length as classical register
-            # condition should be a
-            # - tuple (ClassicalRegister, int)
-            # - tuple (Clbit, bool)
-            # - tuple (Clbit, int)
-            if isinstance(instruction.condition[0], Clbit):
-                bit: Clbit = instruction.condition[0]
-                value: Union[int, bool] = instruction.condition[1]
-                if value:
-                    values = "1"
-                else:
-                    values = "0"
-            else:
-                register: ClassicalRegister = instruction.condition[0]
-                value: int = instruction.condition[1]
-                values = format(value, f"0{register.size}b")
-
-            # Add branches recursively for each bit in the bitstring
-            def __visit():
-                self.visit_instruction(instruction, qargs, cargs, skip_condition=True)
-
-            def _branch(conditions_values):
-                try:
-                    cond, val = next(conditions_values)
-
-                    def __branch():
-                        qis.if_result(
-                            self._builder,
-                            cond,
-                            one=_branch(conditions_values) if val == "1" else None,
-                            zero=_branch(conditions_values) if val == "0" else None,
-                        )
-
-                except StopIteration:
-                    return __visit
-                else:
-                    return __branch
-
-            if len(conditions) < len(values):
-                raise ValueError(
-                    f"Value {value} is larger than register width {len(conditions)}."
-                )
-
-            # qiskit has the most significant bit on the right, so we
-            # must reverse the bit array for comparisons.
-            _branch(zip(conditions, values[::-1]))()
-        elif (
+        if (
             "measure" == instruction.name
             or "m" == instruction.name
             or "mz" == instruction.name
         ):
             for qubit, result in zip(qubits, results):
-                self._measured_qubits[qubit_id(qubit)] = True
+                self._measured_qubits[ptr_id(qubit)] = True
                 qis.mz(self._builder, qubit, result)
         elif "measure_x" == instruction.name:
             for qubit, result in zip(qubits, results):
-                self._measured_qubits[qubit_id(qubit)] = True
+                self._measured_qubits[ptr_id(qubit)] = True
                 self._call_mx_instruction(qubit, result)
         else:
             if not self._capabilities & Capability.QUBIT_USE_AFTER_MEASUREMENT:
@@ -314,7 +254,7 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
                 # back into this function with a supported name and we'll
                 # verify at that time
                 if instruction.name in _SUPPORTED_INSTRUCTIONS:
-                    if any(map(self._measured_qubits.get, map(qubit_id, qubits))):
+                    if any(map(self._measured_qubits.get, map(ptr_id, qubits))):
                         raise QubitUseAfterMeasurementError(
                             self._qiskitModule.circuit,
                             instruction,
@@ -377,7 +317,7 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
                 qis.z(self._builder, *qubits)
             elif "id" == instruction.name:
                 # See: https://github.com/qir-alliance/pyqir/issues/74
-                qubit = pyqir.qubit(self._module.context, qubit_id(*qubits))
+                qubit = pyqir.qubit(self._module.context, ptr_id(*qubits))
                 qis.x(self._builder, qubit)
                 qis.x(self._builder, qubit)
             elif instruction.definition:
@@ -390,6 +330,81 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
                     f"Gate {instruction.name} is not supported. \
     Please transpile using the list of supported gates: {_SUPPORTED_INSTRUCTIONS}."
                 )
+
+    def _visit_if_else_op(
+        self,
+        op: IfElseOp,
+        qargs: List[Bit],
+        cargs: List[Bit],
+    ):
+        if not self._capabilities & Capability.CONDITIONAL_BRANCHING_ON_RESULT:
+            raise ConditionalBranchingOnResultError(
+                self._qiskitModule.circuit, op, qargs, cargs, self._profile
+            )
+
+        if len(op.blocks) > 1:
+            raise NotImplementedError(
+                "IfElseOp with an else branch is not yet supported. "
+                "Only if-without-else is currently translated to QIR."
+            )
+
+        if not isinstance(op.condition, tuple):
+            raise NotImplementedError(
+                f"Classical expression conditions (expr API) are not yet supported. "
+                f"Use the tuple-based condition: (ClassicalRegister, int) or (Clbit, bool). "
+                f"Got: {op.condition!r}"
+            )
+
+        cond_target, cond_value = op.condition
+
+        # condition is (Clbit, bool|int) or (ClassicalRegister, int)
+        if isinstance(cond_target, Clbit):
+            conditions = [
+                pyqir.result(self._module.context, self._clbit_labels.get(cond_target))
+            ]
+            values = "1" if cond_value else "0"
+        else:
+            conditions = [
+                pyqir.result(self._module.context, self._clbit_labels.get(bit))
+                for bit in cond_target
+            ]
+            values = format(cond_value, f"0{cond_target.size}b")
+
+        if len(conditions) < len(values):
+            raise ValueError(
+                f"Value {cond_value} is larger than register width {len(conditions)}."
+            )
+
+        true_body = op.blocks[0]
+
+        def __visit_body():
+            for circuit_instr in true_body.data:
+                self.visit_instruction(
+                    circuit_instr.operation,
+                    list(circuit_instr.qubits),
+                    list(circuit_instr.clbits),
+                )
+
+        def _branch(conditions_values):
+            try:
+                cond, val = next(conditions_values)
+
+                def __branch():
+                    qis.if_result(
+                        self._builder,
+                        cond,
+                        one=_branch(conditions_values) if val == "1" else None,
+                        zero=_branch(conditions_values) if val == "0" else None,
+                    )
+
+            except StopIteration:
+                return __visit_body
+            else:
+                return __branch
+
+        # qiskit has the most significant bit on the right, so we
+        # must reverse the bit array for comparisons.
+        _branch(zip(conditions, values[::-1]))()
 
     def ir(self) -> str:
         return str(self._module)
@@ -413,7 +428,7 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
         assert mod is not None
         void = pyqir.Type.void(mod.context)
         double = pyqir.Type.double(mod.context)
-        function_type = FunctionType(void, [double, pyqir.qubit_type(mod.context)])
+        function_type = FunctionType(void, [double, PointerType(IntType(mod.context, 8))])
         return Function(
             function_type, Linkage.EXTERNAL, "__quantum__qis__delay__body", mod
         )
@@ -423,7 +438,7 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
         assert mod is not None
         void = pyqir.Type.void(mod.context)
         boolean = pyqir.IntType(mod.context, width=1)
-        function_type = FunctionType(void, [boolean, pyqir.qubit_type(mod.context)])
+        function_type = FunctionType(void, [boolean, PointerType(IntType(mod.context, 8))])
         return Function(
             function_type,
             Linkage.EXTERNAL,
@@ -436,7 +451,7 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
         assert mod is not None
         void = pyqir.Type.void(mod.context)
         function_type = FunctionType(
-            void, [pyqir.qubit_type(mod.context), pyqir.result_type(mod.context)]
+            void, [PointerType(IntType(mod.context, 8)), PointerType(IntType(mod.context, 8))]
         )
         return Function(
             function_type, Linkage.EXTERNAL, f"__quantum__qis__mx__body", mod

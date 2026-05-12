@@ -31,8 +31,10 @@ def teleport():
     circuit.h(0)
     circuit.measure(0, 0)
     circuit.measure(1, 1)
-    circuit.x(2).c_if(cr, int("10", 2))
-    circuit.z(2).c_if(cr, int("01", 2))
+    with circuit.if_test((cr, int("10", 2))):
+        circuit.x(2)
+    with circuit.if_test((cr, int("01", 2))):
+        circuit.z(2)
 
     return circuit
 
@@ -60,8 +62,10 @@ def teleport_with_subroutine():
     circuit.h(0)
     circuit.measure(0, 0)
     circuit.measure(1, 1)
-    circuit.x(2).c_if(cr, int("10", 2))
-    circuit.z(2).c_if(cr, int("01", 2))
+    with circuit.if_test((cr, int("10", 2))):
+        circuit.x(2)
+    with circuit.if_test((cr, int("01", 2))):
+        circuit.z(2)
 
     return circuit
 

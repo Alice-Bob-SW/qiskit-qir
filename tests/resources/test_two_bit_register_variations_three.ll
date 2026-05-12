@@ -1,19 +1,16 @@
 ; ModuleID = 'test_two_bit_register_variations_three'
 source_filename = "test_two_bit_register_variations"
 
-%Qubit = type opaque
-%Result = type opaque
-
 define void @test_two_bit_register_variations() #0 {
 entry:
-  call void @__quantum__rt__initialize(i8* null)
-  call void @__quantum__qis__mz__body(%Qubit* null, %Result* null)
-  call void @__quantum__qis__mz__body(%Qubit* inttoptr (i64 1 to %Qubit*), %Result* inttoptr (i64 1 to %Result*))
-  %0 = call i1 @__quantum__qis__read_result__body(%Result* null)
+  call void @__quantum__rt__initialize(ptr null)
+  call void @__quantum__qis__mz__body(ptr null, ptr null)
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 1 to ptr), ptr inttoptr (i64 1 to ptr))
+  %0 = call i1 @__quantum__qis__read_result__body(ptr null)
   br i1 %0, label %then, label %else
 
 then:                                             ; preds = %entry
-  %1 = call i1 @__quantum__qis__read_result__body(%Result* inttoptr (i64 1 to %Result*))
+  %1 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 1 to ptr))
   br i1 %1, label %then1, label %else2
 
 else:                                             ; preds = %entry
@@ -23,7 +20,7 @@ continue:                                         ; preds = %continue3, %else
   ret void
 
 then1:                                            ; preds = %then
-  call void @__quantum__qis__mz__body(%Qubit* inttoptr (i64 2 to %Qubit*), %Result* inttoptr (i64 2 to %Result*))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 2 to ptr), ptr inttoptr (i64 2 to ptr))
   br label %continue3
 
 else2:                                            ; preds = %then
@@ -33,11 +30,11 @@ continue3:                                        ; preds = %else2, %then1
   br label %continue
 }
 
-declare void @__quantum__rt__initialize(i8*)
+declare void @__quantum__rt__initialize(ptr)
 
-declare void @__quantum__qis__mz__body(%Qubit*, %Result* writeonly) #1
+declare void @__quantum__qis__mz__body(ptr, ptr writeonly) #1
 
-declare i1 @__quantum__qis__read_result__body(%Result*)
+declare i1 @__quantum__qis__read_result__body(ptr)
 
 attributes #0 = { "entry_point" "output_labeling_schema" "qir_profiles"="custom" "required_num_qubits"="3" "required_num_results"="3" }
 attributes #1 = { "irreversible" }

@@ -6,14 +6,22 @@ import pytest
 
 from qiskit import transpile
 from qiskit.circuit.random import random_circuit
-from qiskit_qir.visitor import SUPPORTED_INSTRUCTIONS
+
+# Standard Qiskit basis gates that overlap with supported instructions.
+# Non-standard gates (m, measure_x, initialize, barrier, delay) are excluded
+# because Qiskit 2.0 transpile() does not accept non-standard basis_gates.
+_TRANSPILE_BASIS_GATES = [
+    "measure", "cx", "cz", "h", "reset",
+    "rx", "ry", "rz", "s", "sdg", "t", "tdg",
+    "x", "y", "z", "id",
+]
 
 
 def _generate_random_fixture(num_qubits, depth):
     @pytest.fixture()
     def random():
         circuit = random_circuit(num_qubits, depth, measure=True)
-        return transpile(circuit, basis_gates=SUPPORTED_INSTRUCTIONS)
+        return transpile(circuit, basis_gates=_TRANSPILE_BASIS_GATES)
 
     return random
 
