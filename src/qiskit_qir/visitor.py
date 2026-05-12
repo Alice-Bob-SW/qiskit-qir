@@ -8,7 +8,7 @@ from abc import ABCMeta, abstractmethod
 from qiskit import ClassicalRegister, QuantumRegister
 from qiskit.circuit import Qubit, Clbit
 from qiskit.circuit.instruction import Instruction
-from qiskit.circuit.bit import Bit
+from qiskit.circuit import Bit
 import pyqir.qis as qis
 import pyqir.rt as rt
 import pyqir
@@ -24,7 +24,7 @@ from pyqir import (
     PointerType,
     const,
     entry_point,
-    qubit_id,
+    ptr_id,
 )
 from typing import List, Union
 
@@ -301,11 +301,11 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
             or "mz" == instruction.name
         ):
             for qubit, result in zip(qubits, results):
-                self._measured_qubits[qubit_id(qubit)] = True
+                self._measured_qubits[ptr_id(qubit)] = True
                 qis.mz(self._builder, qubit, result)
         elif "measure_x" == instruction.name:
             for qubit, result in zip(qubits, results):
-                self._measured_qubits[qubit_id(qubit)] = True
+                self._measured_qubits[ptr_id(qubit)] = True
                 self._call_mx_instruction(qubit, result)
         else:
             if not self._capabilities & Capability.QUBIT_USE_AFTER_MEASUREMENT:
@@ -314,7 +314,7 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
                 # back into this function with a supported name and we'll
                 # verify at that time
                 if instruction.name in _SUPPORTED_INSTRUCTIONS:
-                    if any(map(self._measured_qubits.get, map(qubit_id, qubits))):
+                    if any(map(self._measured_qubits.get, map(ptr_id, qubits))):
                         raise QubitUseAfterMeasurementError(
                             self._qiskitModule.circuit,
                             instruction,
@@ -377,7 +377,7 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
                 qis.z(self._builder, *qubits)
             elif "id" == instruction.name:
                 # See: https://github.com/qir-alliance/pyqir/issues/74
-                qubit = pyqir.qubit(self._module.context, qubit_id(*qubits))
+                qubit = pyqir.qubit(self._module.context, ptr_id(*qubits))
                 qis.x(self._builder, qubit)
                 qis.x(self._builder, qubit)
             elif instruction.definition:
