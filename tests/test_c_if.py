@@ -119,24 +119,30 @@ def test_single_register_variations_falsy(value: bool) -> None:
     compare_reference_ir(generated_bitcode, "test_single_register_variations_falsy")
 
 
-@pytest.mark.skip(reason="Qiskit 2.0 removed c_if; if_test does not validate single-bit negative values")
+@pytest.mark.skip(
+    reason="Qiskit 2.0 removed c_if; if_test does not validate single-bit negative values — behavior no longer exists"
+)
 @pytest.mark.parametrize("value", invalid_single_bit_varitions)
 def test_single_clbit_invalid_variations(value: int) -> None:
+    # In Qiskit 1.x, c_if(bit, negative_value) raised CircuitError.
+    # In Qiskit 2.x, if_test() does not perform this validation.
     circuit = QuantumCircuit(2, 0, name=f"test_single_clbit_invalid_variations")
     cr = ClassicalRegister(2, "creg")
     circuit.add_register(cr)
     circuit.measure(0, 0)
     bit: Clbit = cr[0]
-
-    with pytest.raises(CircuitError) as exc_info:
-        _ = circuit.measure(1, 1).c_if(bit, value)
-
-    assert exc_info is not None
+    with circuit.if_test((bit, value)):
+        circuit.x(1)
+    # No exception expected in Qiskit 2.x
 
 
-@pytest.mark.skip(reason="Qiskit 2.0 removed c_if; if_test does not validate single-bit negative values")
+@pytest.mark.skip(
+    reason="Qiskit 2.0 does not validate register-index negative values in if_test — behavior no longer exists"
+)
 @pytest.mark.parametrize("value", invalid_single_bit_varitions)
 def test_single_register_index_invalid_variations(value: int) -> None:
+    # In Qiskit 1.x, c_if(register, negative_value) raised CircuitError.
+    # In Qiskit 2.x, if_test() does not perform this validation.
     circuit = QuantumCircuit(
         2,
         0,
@@ -145,12 +151,9 @@ def test_single_register_index_invalid_variations(value: int) -> None:
     cr = ClassicalRegister(2, "creg")
     circuit.add_register(cr)
     circuit.measure(0, 0)
-
-    with pytest.raises(CircuitError) as exc_info:
-        with circuit.if_test((cr, value)):
-            circuit.measure(1, 1)
-
-    assert exc_info is not None
+    with circuit.if_test((cr, value)):
+        circuit.x(1)
+    # No exception expected in Qiskit 2.x
 
 
 @pytest.mark.parametrize("value", invalid_single_bit_varitions)
