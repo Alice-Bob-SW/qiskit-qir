@@ -50,8 +50,6 @@ def test_to_qir_string(circuit_name, request):
     generated_ir = str(to_qir_module(circuit)[0])
     assert generated_ir is not None
     if _log.isEnabledFor(logging.DEBUG):
-        qasm_path = _test_output_dir.joinpath(circuit_name + ".qasm")
-        circuit.qasm(filename=str(qasm_path))
         qir_path = _test_output_dir.joinpath(circuit_name + ".ll")
         qir_path.write_text(generated_ir)
 
@@ -81,8 +79,6 @@ def test_control_flow(circuit_name, request):
     generated_ir = str(to_qir_module(circuit)[0])
     assert generated_ir is not None
     if _log.isEnabledFor(logging.DEBUG):
-        qasm_path = _test_output_dir.joinpath(circuit_name + ".qasm")
-        circuit.qasm(filename=str(qasm_path))
         qir_path = _test_output_dir.joinpath(circuit_name + ".ll")
         qir_path.write_text(generated_ir)
 

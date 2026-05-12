@@ -74,7 +74,8 @@ def test_branching_on_bit_emits_correct_ir():
     circuit = QuantumCircuit(qr, cr, name="branching_on_bit_emits_correct_ir")
     circuit.x(0)
     circuit.measure(0, 0)
-    circuit.x(0).c_if(cr[0], 1)
+    with circuit.if_test((cr[0], 1)):
+        circuit.x(0)
 
     ir = str(to_qir_module(circuit)[0])
     generated_qir = ir.splitlines()
@@ -119,7 +120,8 @@ def test_branching_on_register_with_one_bit_emits_correct_ir():
     )
     circuit.x(0)
     circuit.measure(0, 0)
-    circuit.x(0).c_if(cr, 1)
+    with circuit.if_test((cr, 1)):
+        circuit.x(0)
 
     ir = str(to_qir_module(circuit)[0])
     generated_qir = ir.splitlines()
