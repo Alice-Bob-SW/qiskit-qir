@@ -64,7 +64,7 @@ class CapabilityError(Exception):
                 register: ClassicalRegister = condition[0]
                 value: int = condition[1]
                 instruction_name = "if(%s == %d) %s" % (
-                    register._name,
+                    register.name,
                     value,
                     instruction_name,
                 )
