@@ -204,7 +204,10 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
                 f"Composite instruction {instruction.name} called with the wrong number of classical bits; \
 {subcircuit.num_clbits} expected, {len(cargs)} provided"
             )
-        for inst, i_qargs, i_cargs in subcircuit.data:
+        for circuit_instr in subcircuit.data:
+            inst = circuit_instr.operation
+            i_qargs = circuit_instr.qubits
+            i_cargs = circuit_instr.clbits
             mapped_qbits = [qargs[subcircuit.qubits.index(i)] for i in i_qargs]
             mapped_clbits = [cargs[subcircuit.clbits.index(i)] for i in i_cargs]
             _log.debug(
