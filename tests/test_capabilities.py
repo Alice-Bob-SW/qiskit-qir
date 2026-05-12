@@ -28,8 +28,10 @@ def teleport() -> QuantumCircuit:
     circuit.h(0)
     circuit.measure(0, 0)
     circuit.measure(1, 1)
-    circuit.x(2).c_if(cr, int("10", 2))
-    circuit.z(2).c_if(cr, int("01", 2))
+    with circuit.if_test((cr, int("10", 2))):
+        circuit.x(2)
+    with circuit.if_test((cr, int("01", 2))):
+        circuit.z(2)
     return circuit
 
 
@@ -67,7 +69,8 @@ def use_another_after_measure_and_condition():
     circuit.h(1)
     circuit.cx(1, 2)
     circuit.measure(1, 1)
-    circuit.x(2).c_if(cr, int("10", 2))
+    with circuit.if_test((cr, int("10", 2))):
+        circuit.x(2)
 
     return circuit
 
@@ -80,7 +83,8 @@ def use_conditional_branch_on_single_register_true_value():
     circuit.add_register(cr)
     circuit.x(0)
     circuit.measure(0, 0)
-    circuit.x(1).c_if(cr[2], 1)
+    with circuit.if_test((cr[2], 1)):
+        circuit.x(1)
     circuit.measure(0, 1)
 
     return circuit
@@ -94,7 +98,8 @@ def use_conditional_branch_on_single_register_false_value():
     circuit.add_register(cr)
     circuit.x(0)
     circuit.measure(0, 0)
-    circuit.x(1).c_if(cr[2], 0)
+    with circuit.if_test((cr[2], 0)):
+        circuit.x(1)
     circuit.measure(0, 1)
 
     return circuit
@@ -106,7 +111,8 @@ def conditional_branch_on_bit():
     circuit = QuantumCircuit(qr, cr, name="conditional_branch_on_bit")
     circuit.x(0)
     circuit.measure(0, 0)
-    circuit.x(1).c_if(cr[0], 1)
+    with circuit.if_test((cr[0], 1)):
+        circuit.x(1)
     circuit.measure(1, 1)
     return circuit
 
@@ -164,18 +170,20 @@ def test_branching_on_measurement_fails_without_required_capability():
         _ = circuit_to_qir(circuit, "BasicExecution")
 
     exception_raised = exc_info.value
-    assert (
-        str(exception_raised.instruction)
-        == "Instruction(name='x', num_qubits=1, num_clbits=0, params=[])"
+    assert str(exception_raised.instruction).startswith(
+        "Instruction(name='if_else', num_qubits=1, num_clbits=1, params=["
     )
     assert (
         str(exception_raised.instruction.condition)
-        == "(Clbit(ClassicalRegister(3, 'creg'), 2), False)"
+        == '(<Clbit register=(3, "creg"), index=2>, 0)'
     )
-    assert str(exception_raised.qargs) == "[Qubit(QuantumRegister(2, 'qreg'), 1)]"
-    assert str(exception_raised.cargs) == "[]"
+    assert str(exception_raised.qargs) == '[<Qubit register=(2, "qreg"), index=1>]'
+    assert str(exception_raised.cargs) == '[<Clbit register=(3, "creg"), index=2>]'
     assert str(exception_raised.profile) == "BasicExecution"
-    assert exception_raised.instruction_string == "if(creg[2] == False) x qreg[1]"
+    assert (
+        exception_raised.instruction_string
+        == "if(creg[2] == 0) if_else(param(creg[2])) qreg[1]"
+    )
 
 
 def test_branching_on_measurement_register_passses_with_required_capability():
@@ -198,8 +206,8 @@ def test_reuse_after_measurement_fails_without_required_capability():
         str(exception_raised.instruction)
         == "Instruction(name='h', num_qubits=1, num_clbits=0, params=[])"
     )
-    assert exception_raised.instruction.condition is None
-    assert str(exception_raised.qargs) == "[Qubit(QuantumRegister(2, 'qq'), 1)]"
+    assert getattr(exception_raised.instruction, "condition", None) is None
+    assert str(exception_raised.qargs) == '[<Qubit register=(2, "qq"), index=1>]'
     assert str(exception_raised.cargs) == "[]"
     assert str(exception_raised.profile) == "BasicExecution"
     assert exception_raised.instruction_string == "h qq[1]"
