@@ -19,7 +19,6 @@ from pyqir import (
     FunctionType,
     IntType,
     Linkage,
-    Module,
     PointerType,
     const,
     entry_point,
@@ -36,50 +35,13 @@ from qiskit_qir.elements import QiskitModule
 
 _log = logging.getLogger(name=__name__)
 
-# This list cannot change as existing clients hardcoded to it
-# when it wasn't designed to be externally used.
-# To work around this we are using an additional list to replace
-# this list which contains the instructions that we can process.
-# This following three variables can be removed in a future
-# release after dependency version restrictions have been applied.
-SUPPORTED_INSTRUCTIONS = [
-    "barrier",
-    "delay",
-    "measure",
-    "measure_x",
-    "initialize",
-    "m",
-    "cx",
-    "cz",
-    "h",
-    "reset",
-    "delay",
-    "rx",
-    "ry",
-    "rz",
-    "s",
-    "sdg",
-    "t",
-    "tdg",
-    "x",
-    "y",
-    "z",
-    "id",
-]
 
-_QUANTUM_INSTRUCTIONS = [
-    "barrier",
+SUPPORTED_GATES = [
     "ccx",
     "cx",
     "cz",
     "h",
     "id",
-    "m",
-    "measure",
-    "measure_x",
-    "initialize",
-    "reset",
-    "delay",
     "rx",
     "ry",
     "rz",
@@ -93,7 +55,21 @@ _QUANTUM_INSTRUCTIONS = [
     "z",
 ]
 
-_SUPPORTED_INSTRUCTIONS = _QUANTUM_INSTRUCTIONS
+SUPPORTED_NON_UNITARIES = [
+    "barrier",
+    "initialize",
+    "reset",
+    "delay",
+    "m",
+    "measure",
+    "measure_x",
+]
+
+SUPPORTED_CONTROL_FLOWS = [
+    "if_else",
+]
+
+SUPPORTED_INSTRUCTIONS = SUPPORTED_GATES + SUPPORTED_NON_UNITARIES + SUPPORTED_CONTROL_FLOWS
 
 
 class QuantumCircuitElementVisitor(metaclass=ABCMeta):
@@ -263,7 +239,6 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
             # - tuple (Clbit, bool)
             # - tuple (Clbit, int)
             if isinstance(condition[0], Clbit):
-                bit: Clbit = condition[0]
                 value: Union[int, bool] = condition[1]
                 if value:
                     values = "1"
@@ -332,7 +307,7 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
                 # check. If we have a composite instruction then it will call
                 # back into this function with a supported name and we'll
                 # verify at that time
-                if instruction.name in _SUPPORTED_INSTRUCTIONS:
+                if instruction.name in SUPPORTED_INSTRUCTIONS:
                     if any(map(self._measured_qubits.get, map(qubit_id, qubits))):
                         raise QubitUseAfterMeasurementError(
                             self._qiskitModule.circuit,
@@ -407,7 +382,7 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
             else:
                 raise ValueError(
                     f"Gate {instruction.name} is not supported. \
-    Please transpile using the list of supported gates: {_SUPPORTED_INSTRUCTIONS}."
+    Please transpile using the list of supported gates: {SUPPORTED_INSTRUCTIONS}."
                 )
 
     def ir(self) -> str:

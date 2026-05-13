@@ -226,3 +226,15 @@ def test_two_bit_register_invalid_variations(value: int) -> None:
             circuit.measure(2, 2)
 
     assert exc_info is not None
+
+
+def test_else_branch() -> None:
+    circuit = QuantumCircuit(1, 1, name="test_else_branch")
+    circuit.initialize('1', 0)
+    circuit.measure(0, 0)
+    with circuit.if_test((circuit.cregs[0], 0)) as else_:
+        circuit.measure(0, 0)
+    with else_:
+        circuit.x(0)
+    generated_bitcode = to_qir_module(circuit, record_output=False)[0].bitcode
+    compare_reference_ir(generated_bitcode, "test_else_branch")
