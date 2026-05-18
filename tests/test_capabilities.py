@@ -125,46 +125,48 @@ def circuit_to_qir(circuit, profile: str = "AdaptiveExecution"):
     return visitor.ir()
 
 
-# def test_branching_on_measurement_fails_without_required_capability_one():
-#     circuit = teleport()
-#     with pytest.raises(ConditionalBranchingOnResultError) as exc_info:
-#         _ = circuit_to_qir(circuit, "BasicExecution")
+def test_branching_on_measurement_fails_without_required_capability_one():
+    circuit = teleport()
+    with pytest.raises(ConditionalBranchingOnResultError) as exc_info:
+        _ = circuit_to_qir(circuit, "BasicExecution")
 
-#     exception_raised = exc_info.value
-#     assert (
-#         str(exception_raised.instruction)
-#         == "Instruction(name='x', num_qubits=1, num_clbits=0, params=[])"
-#     )
-#     assert (
-#         str(exception_raised.instruction.condition) == "(ClassicalRegister(2, 'cr'), 2)"
-#     )
-#     assert str(exception_raised.qargs) == "[Qubit(QuantumRegister(3, 'qq'), 2)]"
-#     assert str(exception_raised.cargs) == "[]"
-#     assert str(exception_raised.profile) == "BasicExecution"
-#     assert exception_raised.instruction_string == "if(cr == 2) x qq[2]"
-
-
-# def test_branching_on_measurement_fails_without_required_capability_two():
-#     circuit = use_conditional_branch_on_single_register_true_value()
-#     with pytest.raises(ConditionalBranchingOnResultError) as exc_info:
-#         _ = circuit_to_qir(circuit, "BasicExecution")
-
-#     exception_raised = exc_info.value
-#     assert (
-#         str(exception_raised.instruction)
-#         == "Instruction(name='x', num_qubits=1, num_clbits=0, params=[])"
-#     )
-#     assert (
-#         str(exception_raised.instruction.condition)
-#         == "(Clbit(ClassicalRegister(3, 'creg'), 2), True)"
-#     )
-#     assert str(exception_raised.qargs) == "[Qubit(QuantumRegister(2, 'qreg'), 1)]"
-#     assert str(exception_raised.cargs) == "[]"
-#     assert str(exception_raised.profile) == "BasicExecution"
-#     assert exception_raised.instruction_string == "if(creg[2] == True) x qreg[1]"
+    exception_raised = exc_info.value
+    assert exception_raised.instruction.name == "if_else"
+    assert exception_raised.instruction.num_clbits == 2
+    assert exception_raised.instruction.num_qubits == 1
+    # check that the instruction that caused the error is the correct one (the x gate in the if statement)
+    assert exception_raised.instruction.params[0].data[0].name == "x"
+    assert (
+        str(exception_raised.instruction.condition) == "(ClassicalRegister(2, 'cr'), 2)"
+    )
+    assert str(exception_raised.qargs) == "[<Qubit register=(3, \"qq\"), index=2>]"
+    assert str(exception_raised.cargs) == "[<Clbit register=(2, \"cr\"), index=0>, <Clbit register=(2, \"cr\"), index=1>]"
+    assert str(exception_raised.profile) == "BasicExecution"
+    assert exception_raised.instruction_string == "if(cr == 2) if_else(param(cr[0]),param(cr[1])) qq[2]"
 
 
-def test_branching_on_measurement_fails_without_required_capability():
+def test_branching_on_measurement_fails_without_required_capability_two():
+    circuit = use_conditional_branch_on_single_register_true_value()
+    with pytest.raises(ConditionalBranchingOnResultError) as exc_info:
+        _ = circuit_to_qir(circuit, "BasicExecution")
+
+    exception_raised = exc_info.value
+    assert exception_raised.instruction.name == "if_else"
+    assert exception_raised.instruction.num_clbits == 1
+    assert exception_raised.instruction.num_qubits == 1
+    # check that the instruction that caused the error is the correct one (the x gate in the if statement)
+    assert exception_raised.instruction.params[0].data[0].name == "x"
+    assert (
+        str(exception_raised.instruction.condition)
+        == "(<Clbit register=(3, \"creg\"), index=2>, 1)"
+    )
+    assert str(exception_raised.qargs) == "[<Qubit register=(2, \"qreg\"), index=1>]"
+    assert str(exception_raised.cargs) == "[<Clbit register=(3, \"creg\"), index=2>]"
+    assert str(exception_raised.profile) == "BasicExecution"
+    assert exception_raised.instruction_string == "if(creg[2] == 1) if_else(param(creg[2])) qreg[1]"
+
+
+def test_branching_on_measurement_fails_without_required_capability_three():
     circuit = use_conditional_branch_on_single_register_false_value()
     with pytest.raises(ConditionalBranchingOnResultError) as exc_info:
         _ = circuit_to_qir(circuit, "BasicExecution")
