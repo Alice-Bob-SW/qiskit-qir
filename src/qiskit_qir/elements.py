@@ -5,8 +5,8 @@
 from typing import List, Optional, Union
 from pyqir import Module, Context
 from qiskit import ClassicalRegister, QuantumRegister
-from qiskit.circuit.bit import Bit
-from qiskit.circuit.quantumcircuit import QuantumCircuit, Instruction
+from qiskit.circuit import Bit
+from qiskit.circuit import Instruction, QuantumCircuit
 from abc import ABCMeta, abstractmethod
 
 
@@ -90,8 +90,14 @@ class QiskitModule:
         elements.extend(_Register.from_element_list(circuit.cregs))
 
         # Instructions
-        for instruction, qargs, cargs in circuit._data:
-            elements.append(_Instruction(instruction, qargs, cargs))
+        for instruction in circuit.data:
+            elements.append(
+                _Instruction(
+                    instruction.operation,
+                    list(instruction.qubits),
+                    list(instruction.clbits),
+                )
+            )
 
         if module is None:
             module = Module(Context(), circuit.name)

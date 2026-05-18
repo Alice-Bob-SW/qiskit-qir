@@ -7,7 +7,7 @@ import os
 from typing import Dict, List, Union
 from qiskit import ClassicalRegister, QuantumCircuit, QuantumRegister
 from qiskit.circuit import Qubit, Clbit
-from qiskit.circuit.instruction import Instruction
+from qiskit.circuit import Instruction
 
 
 class Capability(Flag):
@@ -45,14 +45,15 @@ class CapabilityError(Exception):
         gate_params = ",".join(["param(%s)" % bit_labels[c] for c in cargs])
         qubit_params = ",".join(["%s" % bit_labels[q] for q in qargs])
         instruction_name = instruction.name
-        if instruction.condition is not None:
+        condition = getattr(instruction, "condition", None)
+        if condition is not None:
             # condition should be a
             # - tuple (ClassicalRegister, int)
             # - tuple (Clbit, bool)
             # - tuple (Clbit, int)
-            if isinstance(instruction.condition[0], Clbit):
-                bit: Clbit = instruction.condition[0]
-                value: Union[int, bool] = instruction.condition[1]
+            if isinstance(condition[0], Clbit):
+                bit: Clbit = condition[0]
+                value: Union[int, bool] = condition[1]
                 instruction_name = "if(%s[%d] == %s) %s" % (
                     bit._register.name,
                     bit._index,
@@ -60,10 +61,10 @@ class CapabilityError(Exception):
                     instruction_name,
                 )
             else:
-                register: ClassicalRegister = instruction.condition[0]
-                value: int = instruction.condition[1]
+                register: ClassicalRegister = condition[0]
+                value: int = condition[1]
                 instruction_name = "if(%s == %d) %s" % (
-                    register._name,
+                    register.name,
                     value,
                     instruction_name,
                 )
