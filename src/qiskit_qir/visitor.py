@@ -36,6 +36,10 @@ from qiskit_qir.elements import QiskitModule
 _log = logging.getLogger(name=__name__)
 
 
+# SUPPORTED_GATES and SUPPORTED_NON_UNITARIES list the operations that this visitor
+# can translate to QIR. SUPPORTED_INSTRUCTIONS is the combined set used both for
+# capability checking during visitation and by the random-circuit tests to filter
+# Qiskit's standard gate library down to gates the visitor knows how to handle.
 SUPPORTED_GATES = [
     "ccx",
     "cx",
@@ -69,7 +73,7 @@ SUPPORTED_CONTROL_FLOWS = [
     "if_else",
 ]
 
-SUPPORTED_INSTRUCTIONS = SUPPORTED_GATES + SUPPORTED_NON_UNITARIES + SUPPORTED_CONTROL_FLOWS
+SUPPORTED_INSTRUCTIONS = frozenset(SUPPORTED_GATES + SUPPORTED_NON_UNITARIES + SUPPORTED_CONTROL_FLOWS)
 
 
 class QuantumCircuitElementVisitor(metaclass=ABCMeta):
@@ -171,6 +175,10 @@ class BasicQisVisitor(QuantumCircuitElementVisitor):
     def _process_instruction_body(
         self, subcircuit, instruction_name: str, qargs: List[Qubit], cargs: List[Clbit]
     ):
+        if subcircuit is None:
+            raise ValueError(
+                f"Instruction '{instruction_name}' has no definition (body is None)."
+            )
         _log.debug(
             f"Processing composite instruction {instruction_name} with qubits {qargs}"
         )
