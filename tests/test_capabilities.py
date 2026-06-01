@@ -125,7 +125,7 @@ def circuit_to_qir(circuit, profile: str = "AdaptiveExecution"):
     return visitor.ir()
 
 
-def test_branching_on_measurement_fails_without_required_capability_one():
+def test_branching_on_measurement_fails_without_required_capability_with_teleport_circuit():
     circuit = teleport()
     with pytest.raises(ConditionalBranchingOnResultError) as exc_info:
         _ = circuit_to_qir(circuit, "BasicExecution")
@@ -145,7 +145,7 @@ def test_branching_on_measurement_fails_without_required_capability_one():
     assert exception_raised.instruction_string == "if(cr == 2) if_else(param(cr[0]),param(cr[1])) qq[2]"
 
 
-def test_branching_on_measurement_fails_without_required_capability_two():
+def test_branching_on_measurement_fails_without_required_capability_with_true_condition():
     circuit = use_conditional_branch_on_single_register_true_value()
     with pytest.raises(ConditionalBranchingOnResultError) as exc_info:
         _ = circuit_to_qir(circuit, "BasicExecution")
@@ -166,15 +166,15 @@ def test_branching_on_measurement_fails_without_required_capability_two():
     assert exception_raised.instruction_string == "if(creg[2] == 1) if_else(param(creg[2])) qreg[1]"
 
 
-def test_branching_on_measurement_fails_without_required_capability_three():
+def test_branching_on_measurement_fails_without_required_capability_with_false_condition():
     circuit = use_conditional_branch_on_single_register_false_value()
     with pytest.raises(ConditionalBranchingOnResultError) as exc_info:
         _ = circuit_to_qir(circuit, "BasicExecution")
 
     exception_raised = exc_info.value
-    assert str(exception_raised.instruction).startswith(
-        "Instruction(name='if_else', num_qubits=1, num_clbits=1, params=["
-    )
+    assert exception_raised.instruction.name == "if_else"
+    assert exception_raised.instruction.num_clbits == 1
+    assert exception_raised.instruction.num_qubits == 1
     assert (
         str(exception_raised.instruction.condition)
         == '(<Clbit register=(3, "creg"), index=2>, 0)'
