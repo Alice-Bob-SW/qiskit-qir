@@ -72,8 +72,7 @@ deps: ## Install development dependencies
 	$(PYTHON) setup.py develop
 
 dist: clean ## builds source and wheel package
-	$(PYTHON) setup.py sdist
-	$(PYTHON) setup.py bdist_wheel
+	$(PYTHON) -m build
 	ls -l dist
 
 docs: ## generate Sphinx HTML documentation, including API docs
