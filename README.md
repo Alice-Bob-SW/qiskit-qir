@@ -1,5 +1,17 @@
 # qiskit-qir
 
+> **Deprecated.** This fork is no longer maintained and the repository is
+> archived. `qiskit-alice-bob-provider` 3.0 and later converts circuits to QIR
+> itself and no longer depends on this package:
+>
+> ```python
+> from qiskit_alice_bob_provider.qir import circuit_to_qir
+>
+> qir = circuit_to_qir(circuit)  # LLVM text of the QIR module
+> ```
+>
+> The package stays on PyPI so that older provider versions still install.
+
 Qiskit to QIR translator.
 
 This is a temporary fork until the upstream qiskit-qir supports user-defined
